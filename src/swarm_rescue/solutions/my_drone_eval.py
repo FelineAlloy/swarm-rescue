@@ -27,7 +27,7 @@ THRESHOLD_MAX = 40
 
 class MyDroneEval(MyDroneMapping):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(resolution=15, **kwargs)
         self.waypoint = None
 
     def define_message_for_all(self):
@@ -55,17 +55,22 @@ class MyDroneEval(MyDroneMapping):
 
         self.grid.update_grid(pose=self.estimated_pose)
         if self.iteration % 5 == 0:
+
+            res = self.grid.resolution
+            t_pose =  (res/2 * np.array(self.estimated_pose.position) + (res/4 - 0.5) * np.array([self.size_area[0], -self.size_area[1]]))
+
             # self.grid.display(self.grid.grid,
             #                   self.estimated_pose,
             #                   title="occupancy grid")
             self.grid.display(self.grid.zoomed_grid,
-                              self.estimated_pose,
+                              Pose(t_pose, self.estimated_pose.orientation),
                               title="zoomed occupancy grid")
             
             if self.waypoint != None:
 
-                new_grid = Grid(size_area_world=self.size_area, resolution=8)
+                new_grid = Grid(size_area_world=self.size_area, resolution=self.grid.resolution)
                 new_grid.grid[self.waypoint[0], self.waypoint[1]] = 100
+                new_grid.grid[*self.grid._conv_world_to_grid(0, 0)] = -100
 
                 new_zoomed_size = (int(new_grid.size_area_world[1] * 0.5),
                                    int(new_grid.size_area_world[0] * 0.5))
@@ -73,18 +78,18 @@ class MyDroneEval(MyDroneMapping):
                                          interpolation=cv2.INTER_NEAREST)
 
                 new_grid.display(zoomed_grid,
-                                self.estimated_pose,
+                                Pose(t_pose, self.estimated_pose.orientation),
                                 title="new waypoint")
 
         if self.waypoint == None:
             boundry_list = find_cells(self.grid.grid)
             self.waypoint = next_waypoint(self, boundry_list)
-        elif math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 10: #set better value here
+        elif math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 2*self.grid.resolution: #set better value here
             boundry_list = find_cells(self.grid.grid)
             self.waypoint = next_waypoint(self, boundry_list)
         else:
             command = go_to(self, self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1]))
 
-        print(self.waypoint)
+        # print(self.waypoint)
 
         return command

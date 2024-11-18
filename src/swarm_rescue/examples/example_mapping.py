@@ -119,14 +119,13 @@ class OccupancyGrid(Grid):
 
 
 class MyDroneMapping(DroneAbstract):
-    def __init__(self, **kwargs):
+    def __init__(self, resolution, **kwargs):
         super().__init__(**kwargs)
 
         self.iteration: int = 0
 
         self.estimated_pose = Pose()
 
-        resolution = 8
         self.grid = OccupancyGrid(size_area_world=self.size_area,
                                   resolution=resolution,
                                   lidar=self.lidar())
