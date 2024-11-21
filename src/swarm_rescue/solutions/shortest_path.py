@@ -1,5 +1,9 @@
 import os
 import sys
+import numpy as np
+
+x = np.array([[1,2], [3,4], [5,6]])
+
 # Get the parent directory of the current file
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -10,40 +14,39 @@ sys.path.append(parent_dir)
 from solutions.my_drone_random import MyDroneRandom
 import math
 
-
-class Node :
-    def __init__(self, coordinates) :
-        self.coordinates = coordinates # tuple of int
-        self.neighbours = [] # list of neighbouring nodes of form Node
-
-class Graph :
-    def __init__(self) :
-        self.room_map = {}
-        
-    def add_node(self, coordinates) :
-        pass
-        
-
-    def shortest_path(self, start : Node, end : Node) :
-        value_boxes = {i : float('inf') for i in self.room_map.keys()}
-        value_boxes[start] = 0
-        
-           
-        current = start
-        path = [start]
-        del value_boxes[current]
-        
-        while value_boxes :
-            for i in current.neighbours :
-                d = math.sqrt((start.coordinates[0] - end.coordinates[0])**2 + (start.coordinates[1] - end.coordinates[1])**2)
-                if i in value_boxes and value_boxes[i] > value_boxes[current] + d :
-                    value_boxes[i] += d
-                        
-            current = min(value_boxes, key=value_boxes.get)
-            path.append(current)
-            del value_boxes[current]
-            
-        return [i.coordinates for i in path]
+def shortest_path(start , end, grid) :
+    value_boxes = {(i, j) : float('inf') 
+                   for j in range(len(grid.grid[0])) 
+                   for i in range(len(grid.grid)) 
+                   if grid.grid[i, j] < -0.6}
     
-class MyDroneEval(MyDroneRandom):
-    pass
+    value_boxes[start] = 0
+    
+    current = start
+    x, y = current
+    closest = {node : None for node in value_boxes}
+    del value_boxes[current]
+    
+    directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
+
+    while value_boxes :
+        if current == end :
+            break
+
+        for dx, dy in directions :
+            if x + dx in range(len(grid.grid)) and y + dy in range(len(grid.grid[0])) :
+                d = math.sqrt(2) if 0 not in (dx, dy) else 1
+                if (x + dx, y + dy) in value_boxes and value_boxes[(x + dx, y + dy)] > value_boxes[current] + d :
+                    value_boxes[(x + dx, y + dy)] = value_boxes[current] + d
+                    closest[(x+dx, y+dy)] = current
+                    
+        x, y = current = min(value_boxes, key = value_boxes.get)
+        del value_boxes[current]
+
+    p = [end]
+    current = end
+    while current != start :
+        p.append(closest[current])
+        current = closest[current]
+
+    return p[::-1]
