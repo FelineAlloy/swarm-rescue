@@ -15,6 +15,8 @@ from solutions.my_drone_random import MyDroneRandom
 import math
 
 def shortest_path(start , end, grid) :
+    start = grid._conv_world_to_grid(*start)
+
     value_boxes = {(i, j) : float('inf') 
                    for j in range(len(grid.grid[0])) 
                    for i in range(len(grid.grid)) 
@@ -29,6 +31,8 @@ def shortest_path(start , end, grid) :
     
     directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 
+    n = 0
+
     while value_boxes :
         if current == end :
             break
@@ -36,11 +40,12 @@ def shortest_path(start , end, grid) :
         for dx, dy in directions :
             if x + dx in range(len(grid.grid)) and y + dy in range(len(grid.grid[0])) :
                 d = math.sqrt(2) if 0 not in (dx, dy) else 1
-                if (x + dx, y + dy) in value_boxes and value_boxes[(x + dx, y + dy)] > value_boxes[current] + d :
-                    value_boxes[(x + dx, y + dy)] = value_boxes[current] + d
+                if (x + dx, y + dy) in value_boxes and value_boxes[(x + dx, y + dy)] > n + d :
+                    value_boxes[(x + dx, y + dy)] = n + d
                     closest[(x+dx, y+dy)] = current
                     
         x, y = current = min(value_boxes, key = value_boxes.get)
+        n = value_boxes[current]
         del value_boxes[current]
 
     p = [end]
