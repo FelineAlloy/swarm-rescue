@@ -47,8 +47,12 @@ class MyDrone(MyDroneMapping):
         # points on grid bellonging to a rescue center
         self.rescue = None #in grid coordinates
 
+        # displacement used to calculate PID
         self.prev_diff_position = 0
         self.prev_diff_angle = 0
+
+        # grasper toggle
+        self.grasper = 0
 
     def define_message_for_all(self):
         """
@@ -140,7 +144,6 @@ class MyDrone(MyDroneMapping):
         if self.state == self.Activity.GRASPING_WOUNDED:
             # rescue person
             if self.grasped_entities():
-                print(self.grasped_entities())
                 if self.rescue:
                     self.state = self.Activity.DROPPING_AT_RESCUE_CENTER
                     self.waypoint = self.rescue
@@ -148,15 +151,12 @@ class MyDrone(MyDroneMapping):
                 else:
                     self.state = self.Activity.SEARCHING_RESCUE_CENTER
 
-            command["grasper"] = 1
             reached_waypoint = math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 2*self.grid.resolution if self.waypoint != None else True #set better value here
-            if not reached_waypoint:
-                command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1]))
-            else:
-                print(person)
-                if person != (None, None):
-                    target_angle_person = math.atan2((person[1]-self.estimated_pose.position[1]),(person[0]-self.estimated_pose.position[0]))
-                    command.update(self.point_to_angle(person))
+
+            command.update(self.translate_to(self.grid._conv_grid_to_world(*self.waypoint)))
+            if person != (None, None):
+                command.update(self.translate_to(self.grid._conv_grid_to_world(*person)))
+                command.update(self.point_to_angle(self.grid._conv_grid_to_world(*person)))
             
         elif self.state == self.Activity.SEARCHING_RESCUE_CENTER:
             if self.rescue != (None, None):
@@ -183,15 +183,16 @@ class MyDrone(MyDroneMapping):
 
         elif self.state == self.Activity.DROPPING_AT_RESCUE_CENTER:
             if not self.grasped_entities():
-                self.waypoint = self.return_area
-                self.steps = shortest_path(self.estimated_pose.position, self.waypoint, self.grid)
                 self.state = self.Activity.RETURN_TO_AREA
+                if self.return_area:
+                    self.waypoint = self.return_area
+                    self.steps = shortest_path(self.estimated_pose.position, self.waypoint, self.grid)
             
+            # if rescue center in sight, head straight to it
             if rescue != (None, None):
-                print("straight line to ", rescue)
                 command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(*rescue))
             else:
-                # go to center
+                # go to last known position of rescue center
                 next_step = self.steps[0]
                 if math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1])) < 2*self.grid.resolution: #set better value here
                     next_step = self.steps.pop(0)
@@ -208,37 +209,11 @@ class MyDrone(MyDroneMapping):
                 command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1]))
 
         if self.state is self.Activity.SEARCHING_WOUNDED:
-            command["grasper"] = 0
+            self.grasper = 0
+        else:
+            self.grasper = 1
 
-        elif self.state is self.Activity.GRASPING_WOUNDED:
-            command["grasper"] = 1
-
-        elif self.state is self.Activity.SEARCHING_RESCUE_CENTER:
-            command["grasper"] = 1
-
-        elif self.state is self.Activity.DROPPING_AT_RESCUE_CENTER:
-            command["grasper"] = 1
-
-        return command
-
-    def point_to_angle(self, point_B):
-        target_angle = math.atan2((point_B[1]-self.estimated_pose.position[1]),(point_B[0]-self.estimated_pose.position[0]))
-
-        diff_angle = normalize_angle(target_angle - self.estimated_pose.orientation)
-
-        deriv_diff_angle = normalize_angle(diff_angle - self.prev_diff_angle)
-        Kp = 9.0
-        Kd = 0.6
-        rotation = Kp * diff_angle + Kd * deriv_diff_angle
-
-        rotation = clamp(rotation, -1.0, 1.0)
-        # print("counter", self.iteration, "angle", self.true_angle(),
-        #       "diff_angle", diff_angle, "deriv_diff_angle", deriv_diff_angle,
-        #       "sign(diff_angle)", math.copysign(1.0, diff_angle))
-
-        command = {"rotation": rotation}
-
-        self.prev_diff_angle = diff_angle
+        command["grasper"] = self.grasper
 
         return command
 
@@ -268,36 +243,34 @@ class MyDrone(MyDroneMapping):
 
         return (person, rescue)
 
-    def go_to(self, point_A, point_B):
-        command = {"forward": 0.0,
-                    "lateral": 0.0,
-                    "rotation": 0.0,
-                    "grasper": 0}
+    def point_to_angle(self, point_B):
+        target_angle = math.atan2((point_B[1]-self.estimated_pose.position[1]),(point_B[0]-self.estimated_pose.position[0]))
 
-        # point_A and point_B are cartesian coordinates (tuples)
-        # b = drone.estimated_pose.orientation
-        # epsilon_d = 0.5
-        # epsilon_a = 0.2 * math.pi
+        diff_angle = normalize_angle(target_angle - self.estimated_pose.orientation)
 
-        # target_angle = math.atan2((point_B[1]-point_A[1]),(point_B[0]-point_A[0]))
-        # if not (target_angle - epsilon_a < b < target_angle + epsilon_a):
-        #     if not (-math.pi > target_angle - b  > math.pi):
-        #         command["rotation"] = 1
-        #     else:
-        #         command["rotation"] = 0
-        # else:
-        #     command["rotation"] = 0
-        #     if not(point_B[0] - epsilon_d <= point_A[0] <= point_B[0] + epsilon_d ) and not(point_B[1] - epsilon_d <= point_A[1] <= point_B[1] + epsilon_d):
-        #         command["forward"] = 1
-        #     else:
-        #         command["forward"] = -0.9
+        deriv_diff_angle = normalize_angle(diff_angle - self.prev_diff_angle)
+        Kp = 9.0
+        Kd = 0.6
+        rotation = Kp * diff_angle + Kd * deriv_diff_angle
 
+        rotation = clamp(rotation, -1.0, 1.0)
+        # print("counter", self.iteration, "angle", self.true_angle(),
+        #       "diff_angle", diff_angle, "deriv_diff_angle", deriv_diff_angle,
+        #       "sign(diff_angle)", math.copysign(1.0, diff_angle))
+
+        command = {"rotation": rotation}
+
+        self.prev_diff_angle = diff_angle
+
+        return command
+    
+    def translate_to(self, point_B):
+        
         target_angle = math.atan2((point_B[1]-self.estimated_pose.position[1]),(point_B[0]-self.estimated_pose.position[0]))
 
         angle_difference = self.estimated_pose.orientation - target_angle
         
-        #sign = math.cos(angle_difference)
-        diff_position = (math.dist(np.asarray(point_A), np.asarray(point_B)))
+        diff_position = (math.dist(self.estimated_pose.position, np.asarray(point_B)))
 
         deriv_diff_position = diff_position - self.prev_diff_position
         Kp = 1.6
@@ -313,13 +286,19 @@ class MyDrone(MyDroneMapping):
         #         " forward ", force*math.cos(angle_difference),
         #         " lateral ", -force*math.sin(angle_difference),)
 
-        rotation = 0.0
         command = {"forward": force*math.cos(angle_difference),
-                   "lateral" : -force*math.sin(angle_difference),
-                    "rotation": rotation}
+                   "lateral" : -force*math.sin(angle_difference)}
 
         self.prev_diff_position = diff_position
-        
+
+        return command
+
+    def go_to(self, point_A, point_B):
+        command = {"forward": 0.0,
+                    "lateral": 0.0,
+                    "rotation": 0.0}
+
+        command.update(self.translate_to(point_B))        
         command.update(self.point_to_angle(point_B))
 
         return command
