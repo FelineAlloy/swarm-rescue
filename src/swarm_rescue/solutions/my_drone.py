@@ -15,6 +15,7 @@ sys.path.append(parent_dir)
 
 from spg_overlay.utils.pose import Pose
 from spg_overlay.utils.grid import Grid
+from spg_overlay.utils.timer import Timer
 from spg_overlay.utils.constants import MAX_RANGE_LIDAR_SENSOR
 from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
 
@@ -51,8 +52,14 @@ class MyDrone(MyDroneMapping):
         self.prev_diff_position = 0
         self.prev_diff_angle = 0
 
+        # last command sent, used to estimate position when gps is not available
+        self.prev_command = None
+
         # grasper toggle
         self.grasper = 0
+
+        # timer to calculate elapsed time between timesteps
+        self.timer = Timer()
 
     def define_message_for_all(self):
         """
@@ -64,6 +71,10 @@ class MyDrone(MyDroneMapping):
         """
         Draft of control loop
         """
+
+        # begin timestep timer
+        self.timer.restart()
+
         command = {"forward": 0.0,
                    "lateral": 0.0,
                    "rotation": 0.0,
@@ -77,10 +88,7 @@ class MyDrone(MyDroneMapping):
 
         # evenetually we can make a better function which filters the noise from the sensors
         # for now we need to handle the case when we don't have gps
-        # self.estimated_pose = self.get_pose()
-        
-        self.estimated_pose = Pose(np.asarray(self.measured_gps_position()),
-                                   self.measured_compass_angle())
+        self.estimated_pose = self.get_pose()
         
         # update map
         self.grid.update_grid(pose=self.estimated_pose)
@@ -215,7 +223,31 @@ class MyDrone(MyDroneMapping):
 
         command["grasper"] = self.grasper
 
+        self.prev_command = command
         return command
+
+    def get_pose(self):
+        position = np.zeros(2)
+        orientation = 0 
+
+        if not self.compass_is_disabled():
+            orientation = self.measured_compass_angle()
+        elif self.estimated_pose:
+            orientation = self.estimated_pose.orientation + self.odometer_values()[2]
+
+        if not self.gps_is_disabled():
+            position = np.array(self.measured_gps_position())
+        elif self.estimated_pose:
+            dist = self.odometer_values()[0]
+            alpha = self.odometer_values()[1]
+
+            dx = dist * math.cos(alpha + self.estimated_pose.orientation)
+            dy = dist * math.sin(alpha + self.estimated_pose.orientation)
+            position = self.estimated_pose.position + np.asarray([dx, dy])
+        
+        print(self.true_position() - position, self.true_angle() - orientation)
+
+        return Pose(position, orientation)
 
     def process_semantic(self):
         detection_semantic = self.semantic_values()
