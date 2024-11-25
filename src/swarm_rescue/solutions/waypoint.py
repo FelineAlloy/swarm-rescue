@@ -139,8 +139,8 @@ def count_zeros_around_point(grid, point):
     count = 0
     
     # Get the bounds of the 5x5 area, ensuring they don't go out of bounds of the grid
-    for i in range(x - 2, x + 3):
-        for j in range(y - 2, y + 3):
+    for i in range(x - 1, x + 2):
+        for j in range(y - 1, y + 2):
             # Check if the indices are within the bounds of the grid
             if 0 <= i < rows and 0 <= j < cols:
                 if grid[i, j] == 0:
@@ -177,7 +177,7 @@ def find_cells(grid):
 
     # Iterate through valid cells
     for x, y in valid_cells:
-        if count_zeros_around_point(grid, (x, y)) > 10:
+        if count_zeros_around_point(grid, (x, y)) > 1:
             result.append((x, y))  # Append (x, y) as (col, row)
 
     return result

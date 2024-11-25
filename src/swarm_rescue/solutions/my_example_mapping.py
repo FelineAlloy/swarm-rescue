@@ -36,7 +36,8 @@ class OccupancyGrid(Grid):
     def __init__(self,
                  size_area_world,
                  resolution: float,
-                 lidar):
+                 lidar,
+                 semantic):
         super().__init__(size_area_world=size_area_world,
                          resolution=resolution)
 
@@ -44,6 +45,7 @@ class OccupancyGrid(Grid):
         self.resolution = resolution
 
         self.lidar = lidar
+        self.semantic = semantic
 
         self.x_max_grid: int = int(self.size_area_world[0] / self.resolution
                                    + 0.5)
@@ -70,6 +72,16 @@ class OccupancyGrid(Grid):
         lidar_dist = self.lidar.get_sensor_values()[::EVERY_N].copy()
         lidar_angles = self.lidar.ray_angles[::EVERY_N].copy()
 
+        semantic_data = self.semantic.get_sensor_values().copy()
+        semantic_angles = [data.angle for data in semantic_data]
+
+        invalid_angles = []
+
+        # for angle in semantic_angles:
+        #     differences = np.abs(angle - lidar_angles)
+        #     closest_indices = np.argsort(differences)[:4]
+        #     invalid_angles.append(closest_indices)
+
         # Compute cos and sin of the absolute angle of the lidar
         cos_rays = np.cos(lidar_angles + pose.orientation)
         sin_rays = np.sin(lidar_angles + pose.orientation)
@@ -95,6 +107,7 @@ class OccupancyGrid(Grid):
 
         # For obstacle zones, all values of lidar_dist are < max_range
         select_collision = lidar_dist < max_range
+        select_collision[invalid_angles] = False
 
         points_x = pose.position[0] + np.multiply(lidar_dist, cos_rays)
         points_y = pose.position[1] + np.multiply(lidar_dist, sin_rays)
@@ -128,7 +141,8 @@ class MyDroneMapping(DroneAbstract):
 
         self.grid = OccupancyGrid(size_area_world=self.size_area,
                                   resolution=resolution,
-                                  lidar=self.lidar())
+                                  lidar=self.lidar(),
+                                  semantic=self.semantic())
 
     def define_message_for_all(self):
         """
