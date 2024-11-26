@@ -17,6 +17,8 @@ import math
 def shortest_path(start , end, grid) :
     start = grid._conv_world_to_grid(*start)
 
+
+
     value_boxes = {(i, j) : float('inf') 
                    for j in range(len(grid.grid[0])) 
                    for i in range(len(grid.grid)) 
@@ -40,6 +42,9 @@ def shortest_path(start , end, grid) :
         for dx, dy in directions :
             if x + dx in range(len(grid.grid)) and y + dy in range(len(grid.grid[0])) :
                 d = math.sqrt(2) if 0 not in (dx, dy) else 1
+                if dx * dy != 0:
+                    if not grid.grid[x, y+dy] < -0.6 or not grid.grid[x+dx, y] < -0.6:
+                        continue
                 if (x + dx, y + dy) in value_boxes and value_boxes[(x + dx, y + dy)] > n + d :
                     value_boxes[(x + dx, y + dy)] = n + d
                     closest[(x+dx, y+dy)] = current

@@ -15,7 +15,6 @@ sys.path.append(parent_dir)
 
 from spg_overlay.utils.pose import Pose
 from spg_overlay.utils.grid import Grid
-from spg_overlay.utils.timer import Timer
 from spg_overlay.utils.constants import MAX_RANGE_LIDAR_SENSOR
 from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
 
@@ -25,6 +24,8 @@ from solutions.waypoint import find_cells, next_waypoint
 from solutions.shortest_path import shortest_path
 from spg_overlay.utils.utils import clamp
 from spg_overlay.utils.utils import normalize_angle
+
+# todo: handle errors better, make the code more readable
 
 class MyDrone(MyDroneMapping):
     class Activity(Enum):
@@ -58,9 +59,6 @@ class MyDrone(MyDroneMapping):
         # grasper toggle
         self.grasper = 0
 
-        # timer to calculate elapsed time between timesteps
-        self.timer = Timer()
-
     def define_message_for_all(self):
         """
         To do later
@@ -71,9 +69,6 @@ class MyDrone(MyDroneMapping):
         """
         Draft of control loop
         """
-
-        # begin timestep timer
-        self.timer.restart()
 
         command = {"forward": 0.0,
                    "lateral": 0.0,
@@ -92,39 +87,39 @@ class MyDrone(MyDroneMapping):
         
         # update map
         self.grid.update_grid(pose=self.estimated_pose)
-        person, rescue = self.process_semantic()
+        person, rescue, rescue_actual = self.process_semantic()
         if rescue != (None, None):
             self.rescue = rescue
 
         
 
         # debugging views
-        if self.iteration % 5 == 0:
+        # if self.iteration % 5 == 0:
 
-            res = self.grid.resolution
-            t_pose =  (res/2 * np.array(self.estimated_pose.position) + (res/4 - 0.5) * np.array([self.size_area[0], -self.size_area[1]]))
+        #     res = self.grid.resolution
+        #     t_pose =  (res/2 * np.array(self.estimated_pose.position) + (res/4 - 0.5) * np.array([self.size_area[0], -self.size_area[1]]))
 
-            # self.grid.display(self.grid.grid,
-            #                   self.estimated_pose,
-            #                   title="occupancy grid")
-            self.grid.display(self.grid.zoomed_grid,
-                              Pose(t_pose, self.estimated_pose.orientation),
-                              title="zoomed occupancy grid")
+        #     # self.grid.display(self.grid.grid,
+        #     #                   self.estimated_pose,
+        #     #                   title="occupancy grid")
+        #     self.grid.display(self.grid.zoomed_grid,
+        #                       Pose(t_pose, self.estimated_pose.orientation),
+        #                       title="zoomed occupancy grid")
             
-            if self.waypoint != None:
+        #     if self.waypoint != None:
 
-                new_grid = Grid(size_area_world=self.size_area, resolution=self.grid.resolution)
-                new_grid.grid[self.waypoint[0], self.waypoint[1]] = 100
-                new_grid.grid[*self.grid._conv_world_to_grid(0, 0)] = -100
+        #         new_grid = Grid(size_area_world=self.size_area, resolution=self.grid.resolution)
+        #         new_grid.grid[self.waypoint[0], self.waypoint[1]] = 100
+        #         new_grid.grid[*self.grid._conv_world_to_grid(0, 0)] = -100
 
-                new_zoomed_size = (int(new_grid.size_area_world[1] * 0.5),
-                                   int(new_grid.size_area_world[0] * 0.5))
-                zoomed_grid = cv2.resize(new_grid.grid, new_zoomed_size,
-                                         interpolation=cv2.INTER_NEAREST)
+        #         new_zoomed_size = (int(new_grid.size_area_world[1] * 0.5),
+        #                            int(new_grid.size_area_world[0] * 0.5))
+        #         zoomed_grid = cv2.resize(new_grid.grid, new_zoomed_size,
+        #                                  interpolation=cv2.INTER_NEAREST)
 
-                new_grid.display(zoomed_grid,
-                                Pose(t_pose, self.estimated_pose.orientation),
-                                title="new waypoint")
+        #         new_grid.display(zoomed_grid,
+        #                         Pose(t_pose, self.estimated_pose.orientation),
+        #                         title="new waypoint")
 
         if self.state == self.Activity.SEARCHING_WOUNDED:
             if person != (None, None):
@@ -197,15 +192,29 @@ class MyDrone(MyDroneMapping):
                     self.steps = shortest_path(self.estimated_pose.position, self.waypoint, self.grid)
             
             # if rescue center in sight, head straight to it
-            if rescue != (None, None):
-                command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(*rescue))
+            if rescue_actual != (None, None):
+                # command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(*rescue_actual))
+                rescue_gps = self.grid._conv_grid_to_world(*rescue_actual)
+                angle = target_angle = math.atan2((rescue_gps[1]-self.estimated_pose.position[1]),(rescue_gps[0]-self.estimated_pose.position[0]))
+                diff_angle = normalize_angle(target_angle - self.estimated_pose.orientation)
+                forward = math.cos(diff_angle)
+                lateral = math.sin(diff_angle)
+                # command.update(self.point_to_angle(rescue_gps))
+                command.update({
+                    "forward": forward,
+                    "lateral": lateral
+                })
+
+                print(self.prev_command)
+
             else:
                 # go to last known position of rescue center
-                next_step = self.steps[0]
-                if math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1])) < 2*self.grid.resolution: #set better value here
-                    next_step = self.steps.pop(0)
+                if len(self.steps) > 0:
+                    next_step = self.steps[0]
+                    if math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1])) < 1*self.grid.resolution: #set better value here
+                        next_step = self.steps.pop(0)
 
-                command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1]))
+                    command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(next_step[0], next_step[1]))
 
         elif self.state == self.Activity.RETURN_TO_AREA:
             reached_waypoint = math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 2*self.grid.resolution if self.waypoint != None else True #set better value here
@@ -245,7 +254,7 @@ class MyDrone(MyDroneMapping):
             dy = dist * math.sin(alpha + self.estimated_pose.orientation)
             position = self.estimated_pose.position + np.asarray([dx, dy])
         
-        print(self.true_position() - position, self.true_angle() - orientation)
+        # print(self.true_position() - position, self.true_angle() - orientation)
 
         return Pose(position, orientation)
 
@@ -257,6 +266,7 @@ class MyDrone(MyDroneMapping):
 
         person = (None, None)
         rescue = (None, None)
+        rescue_actual = (None, None)
 
         for data in detection_semantic:
             if data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON and not data.grasped:
@@ -271,9 +281,12 @@ class MyDrone(MyDroneMapping):
                 x, y = self.estimated_pose.position
                 x_rescue = x + math.cos(data.angle + self.estimated_pose.orientation) * data.distance * 0.8
                 y_rescue = y + math.sin(data.angle + self.estimated_pose.orientation) * data.distance * 0.8
+                x_rescue_act = x + math.cos(data.angle + self.estimated_pose.orientation) * data.distance
+                y_rescue_act = y + math.sin(data.angle + self.estimated_pose.orientation) * data.distance
                 rescue = self.grid._conv_world_to_grid(x_rescue, y_rescue)
+                rescue_actual = self.grid._conv_world_to_grid(x_rescue_act, y_rescue_act)
 
-        return (person, rescue)
+        return (person, rescue, rescue_actual)
 
     def point_to_angle(self, point_B):
         target_angle = math.atan2((point_B[1]-self.estimated_pose.position[1]),(point_B[0]-self.estimated_pose.position[0]))

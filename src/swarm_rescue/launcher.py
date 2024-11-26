@@ -67,7 +67,7 @@ class Launcher:
         self.team_info = TeamInfo()
         self.eval_plan = EvalPlan()
 
-        zones_config: ZonesConfig = (ZoneType.NO_GPS_ZONE, )
+        zones_config: ZonesConfig = ( )
         eval_config = EvalConfig(map_type=MyMapIntermediate01, zones_config=zones_config, nb_rounds=1)
         self.eval_plan.add(eval_config=eval_config)
 
