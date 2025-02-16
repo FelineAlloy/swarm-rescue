@@ -64,9 +64,13 @@ class MyDrone(MyDroneMapping):
 
     def define_message_for_all(self):
         """
-        To do later
+        Define the message, the drone will send to and receive from other surrounding drones.
         """
-        pass
+        msg_data = (self.identifier, self.grid,
+                    (self.measured_gps_position(), self.measured_compass_angle()))
+        
+        return msg_data
+    
 
     def control(self):
         """
@@ -95,6 +99,7 @@ class MyDrone(MyDroneMapping):
         person, rescue, rescue_actual = self.process_semantic()
         if rescue != (None, None):
             self.rescue = rescue
+
 
         # debugging views
         # if self.iteration % 5 == 0:
@@ -247,6 +252,12 @@ class MyDrone(MyDroneMapping):
 
         self.prev_command = command
         return command
+    
+    def process_communication(self):
+        if self.communicator:
+            received_messages = self.communicator.received_messages
+            grid = received_messages[1]
+            self.grid.grid = (self.grid.grid + grid.grid) / 2
 
     def get_pose(self):
         position = np.zeros(2)
