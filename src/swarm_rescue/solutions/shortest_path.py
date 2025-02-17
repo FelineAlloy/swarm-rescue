@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+from queue import PriorityQueue
 
 x = np.array([[1,2], [3,4], [5,6]])
 
@@ -14,44 +15,38 @@ sys.path.append(parent_dir)
 from solutions.my_drone_random import MyDroneRandom
 import math
 
-def shortest_path(start , end, grid) :
-    start = grid._conv_world_to_grid(*start)
+def shortest_path(start, end, grid) :
+    end = (int(end[0]), int(end[1])) # Convert np.array to tuple
 
-
-
-    value_boxes = {(i, j) : float('inf') 
-                   for j in range(len(grid.grid[0])) 
-                   for i in range(len(grid.grid)) 
-                   if grid.grid[i, j] < -0.6}
-    
-    value_boxes[start] = 0
-    
-    current = start
-    x, y = current
-    closest = {node : None for node in value_boxes}
-    del value_boxes[current]
+    cost = np.full((grid.x_max_grid, grid.y_max_grid), np.inf)
+    pq = PriorityQueue() # (dist, (x, y))
+    viz = np.full((grid.x_max_grid, grid.y_max_grid), False) 
+    closest = dict() # (x, y): (x1, y1)
     
     directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 
-    n = 0
+    pq.put((0, start))
+    cost[start] = 0
 
-    while value_boxes :
-        if current == end :
-            break
+    while not pq.empty():
+        x, y = current = pq.get()[1]
+        dist = cost[current]
+        viz[current] = True
 
         for dx, dy in directions :
-            if x + dx in range(len(grid.grid)) and y + dy in range(len(grid.grid[0])) :
+            if 0 <= x + dx < grid.x_max_grid and 0 <= y + dy < grid.y_max_grid and grid.grid[x+dx, y+dy] < -0.6:
                 d = math.sqrt(2) if 0 not in (dx, dy) else 1
                 if dx * dy != 0:
-                    if not grid.grid[x, y+dy] < -0.6 or not grid.grid[x+dx, y] < -0.6:
+                    if not (grid.grid[x, y+dy] < -0.6 and grid.grid[x+dx, y] < -0.6):
                         continue
-                if (x + dx, y + dy) in value_boxes and value_boxes[(x + dx, y + dy)] > n + d :
-                    value_boxes[(x + dx, y + dy)] = n + d
+                if not viz[(x + dx, y + dy)] and cost[(x + dx, y + dy)] > dist + d :
+                    cost[(x + dx, y + dy)] = dist + d
                     closest[(x+dx, y+dy)] = current
-                    
-        x, y = current = min(value_boxes, key = value_boxes.get)
-        n = value_boxes[current]
-        del value_boxes[current]
+                    pq.put((dist + d, (x + dx, y + dy)))
+
+    if end not in closest: # this is just a temporary patch
+        print(f"Warning: No path found from {start} to {end}")
+        return [start]
 
     p = [end]
     current = end

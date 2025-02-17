@@ -66,7 +66,7 @@ class MyDrone(MyDroneMapping):
         msg_data = (self.identifier, self.grid,
                     (self.measured_gps_position(), self.measured_compass_angle()))
         
-        return msg_data
+        #return msg_data
     
 
     def control(self):
@@ -79,8 +79,7 @@ class MyDrone(MyDroneMapping):
                    "rotation": 0.0,
                    "grasper": 0}
 
-        # increment the iteration counter
-        self.iteration += 1
+        
 
         if self.iteration == 1:
             self.return_area = self.grid._conv_world_to_grid(*self.measured_gps_position()) #in grid coordinates
@@ -131,7 +130,7 @@ class MyDrone(MyDroneMapping):
                 self.steps = []
                 # self.steps = shortest_path(self.estimated_pose.position, self.waypoint, self.grid)
             else:    
-                # serach wonded
+                # search wounded
                 reached_waypoint = math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 2*self.grid.resolution if self.waypoint != None else True #set better value here
                 if reached_waypoint:
                     #find waypoint
@@ -167,11 +166,10 @@ class MyDrone(MyDroneMapping):
         elif self.state == self.Activity.SEARCHING_RESCUE_CENTER:
             if self.rescue != (None, None):
                 self.state = self.Activity.DROPPING_AT_RESCUE_CENTER
-                self.state = self.Activity.DROPPING_AT_RESCUE_CENTER
                 self.waypoint = self.rescue
                 self.steps = shortest_path(self.estimated_pose.position, self.waypoint, self.grid)
 
-            # serach rescue center
+            # search rescue center
             reached_waypoint = math.dist(self.estimated_pose.position, self.grid._conv_grid_to_world(self.waypoint[0], self.waypoint[1])) < 2*self.grid.resolution #set better value here
             if self.waypoint == None or reached_waypoint:
                 #find waypoint
@@ -198,7 +196,7 @@ class MyDrone(MyDroneMapping):
             if rescue_actual != (None, None):
                 # command = self.go_to(self.estimated_pose.position, self.grid._conv_grid_to_world(*rescue_actual))
                 rescue_gps = self.grid._conv_grid_to_world(*rescue_actual)
-                angle = target_angle = math.atan2((rescue_gps[1]-self.estimated_pose.position[1]),(rescue_gps[0]-self.estimated_pose.position[0]))
+                target_angle = math.atan2((rescue_gps[1]-self.estimated_pose.position[1]),(rescue_gps[0]-self.estimated_pose.position[0]))
                 diff_angle = normalize_angle(target_angle - self.estimated_pose.orientation)
                 forward = math.cos(diff_angle)
                 lateral = math.sin(diff_angle)
