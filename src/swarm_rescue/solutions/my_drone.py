@@ -19,6 +19,7 @@ from spg_overlay.utils.constants import MAX_RANGE_LIDAR_SENSOR
 from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
 
 from solutions.my_example_mapping import MyDroneMapping
+from solutions.my_drone_lidar_communication import MyDroneLidarCommunication
 
 from solutions.waypoint import find_cells, next_waypoint
 from solutions.shortest_path import shortest_path
@@ -40,6 +41,8 @@ class MyDrone(MyDroneMapping):
 
     def __init__(self, **kwargs):
         super().__init__(resolution=30, **kwargs)
+        self.last_communication = 0
+
         self.waypoint = None # final destination in grid coordinates
         self.steps = None # next steps in grid coordinates
 
@@ -73,6 +76,8 @@ class MyDrone(MyDroneMapping):
         """
         Draft of control loop
         """
+
+        max_time_communication = 10
 
         command = {"forward": 0.0,
                    "lateral": 0.0,
@@ -122,6 +127,16 @@ class MyDrone(MyDroneMapping):
         #         new_grid.display(zoomed_grid,
         #                         Pose(t_pose, self.estimated_pose.orientation),
         #                         title="new waypoint")
+
+        found_drone, _ = MyDroneLidarCommunication.process_communication_sensor()
+
+        # update last_communication to current iteration if we have seen a drone in the current iteration
+        if found_drone :
+            self.last_communication = self.iteration
+
+        # if we haven't seen a drone in too long, then set next waypoint to the rescue zone
+        if self.iteration - self.last_communication > max_time_communication :
+            self.state = self.Activity.RETURN_TO_AREA
 
         if self.state == self.Activity.SEARCHING_WOUNDED:
             if person != (None, None):
