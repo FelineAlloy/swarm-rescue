@@ -24,6 +24,7 @@ from spg_overlay.gui_map.closed_playground import ClosedPlayground
 from spg_overlay.gui_map.gui_sr import GuiSR
 from spg_overlay.gui_map.map_abstract import MapAbstract
 from spg_overlay.utils.misc_data import MiscData
+from solutions.pid_controller import PIDController
 
 
 class MyDronePidTranslation(DroneAbstract):
@@ -39,6 +40,8 @@ class MyDronePidTranslation(DroneAbstract):
         self.prev_diff_position = 0
 
         self.to_the_right = True
+
+        self.PID = PIDController(kp=[10, 0, 0], ki=[0, 0, 0], kd=[0, 0, 0])
 
     def define_message_for_all(self):
         """
@@ -74,24 +77,29 @@ class MyDronePidTranslation(DroneAbstract):
                          np.asarray(self.true_position()))
 
         if self.identifier == 0:  # with PD
-            deriv_diff_position = diff_position - self.prev_diff_position
-            Kp = 1.6
-            Kd = 11.0
+            # deriv_diff_position = diff_position - self.prev_diff_position
+            # Kp = 1.6
+            # Kd = 11.0
 
-            forward = (Kp * float(diff_position[0]) +
-                       Kd * float(deriv_diff_position[0]))
+            # forward = (Kp * float(diff_position[0]) +
+            #            Kd * float(deriv_diff_position[0]))
 
-            forward = clamp(forward, -1.0, 1.0)
+            # forward = clamp(forward, -1.0, 1.0)
 
-            print("counter", self.counter,
-                  ", diff_position", int(diff_position[0] * 10),
-                  "forward=", forward)
+            # print("counter", self.counter,
+            #       ", diff_position", int(diff_position[0] * 10),
+            #       "forward=", forward)
 
-            rotation = 0.0
-            command = {"forward": forward,
-                       "rotation": rotation}
+            # rotation = 0.0
+            # command = {"forward": forward,
+            #            "rotation": rotation}
 
-            self.prev_diff_position = diff_position
+            # self.prev_diff_position = diff_position
+            position = np.array([self.true_position()[0],
+                                 self.true_position()[1]])
+            angle = self.true_angle()
+            pose = Pose(position=position, orientation=angle)
+            command = self.PID.compute_control(drone_pos=pose, target_pos=self.position_setpoint, target_yaw=0)
 
         elif self.identifier == 1:  # with P with too much gain
             forward = 2.0 * float(diff_position[0])
