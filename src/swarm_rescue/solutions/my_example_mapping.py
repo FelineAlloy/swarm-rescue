@@ -55,6 +55,8 @@ class OccupancyGrid(Grid):
         self.grid = np.zeros((self.x_max_grid, self.y_max_grid))
         self.zoomed_grid = np.empty((self.x_max_grid, self.y_max_grid))
 
+        # self.timeout_grid = np.zeros((self.x_max_grid, self.y_max_grid)) # remember time when last updated cell
+
     def update_grid(self, pose: Pose):
         """
         Bayesian map update with new observation
